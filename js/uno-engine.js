@@ -299,3 +299,5 @@ class GameRoom {
     return { hand: player ? player.hand : [], drawnCardIndex };
   }
 }
+
+export { COLORS, canPlay, cardSymbol, cardName, GameRoom };

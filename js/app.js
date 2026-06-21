@@ -11,16 +11,19 @@ class UnoApp {
   constructor() {
     this.myName = '';
     this.isHost = false;
-    this.room = null;        // GameRoom (host only)
-    this.trRoom = null;      // Trystero room
-    this.sendMsg = null;     // Trystero send fn
-    this.hostPeerId = null;  // guest only
+    this.room = null;
+    this.trRoom = null;
+    this.sendMsg = null;
+    this.hostPeerId = null;
+    this.roomCode = null;
     this.publicState = null;
     this.myHand = [];
     this.drawnCardIndex = null;
     this.pendingWild = null;
     this._toastTimer = null;
+    this._hiddenAt = 0;
     this.bindUI();
+    this.setupVisibility();
   }
 
   // ─── Utilities ───────────────────────────────────────────────
@@ -52,6 +55,7 @@ class UnoApp {
     this.isHost = true;
 
     const code = this.genCode();
+    this.roomCode = code;
     this.room = new GameRoom();
     this.room.addPlayer(selfId, this.myName);
 
@@ -97,6 +101,10 @@ class UnoApp {
       }
       if (data.type === 'action') {
         this.processAction(peerId, data);
+        return;
+      }
+      if (data.type === 'ping') {
+        this.broadcastState();
       }
     });
 
@@ -104,6 +112,7 @@ class UnoApp {
     document.getElementById('room-code-display').textContent = code;
     document.getElementById('btn-start').style.display = '';
     document.getElementById('waiting-text').style.display = 'none';
+    this.saveSession();
     this.renderLobbyPlayers();
   }
 
@@ -150,6 +159,7 @@ class UnoApp {
       if (data.type === 'host-hello' && !this.hostPeerId) {
         clearTimeout(joinTimeout);
         this.hostPeerId = peerId;
+        this.roomCode = code;
         sendMsg({ type: 'guest-join', name: this.myName }, peerId);
         this.showScreen('lobby');
         document.getElementById('room-code-display').textContent = code;
@@ -157,6 +167,7 @@ class UnoApp {
         document.getElementById('waiting-text').style.display = '';
         btnJoin.disabled = false;
         btnJoin.textContent = 'Join →';
+        this.saveSession();
         return;
       }
 
@@ -451,6 +462,38 @@ class UnoApp {
     document.getElementById('modal-gameover').classList.add('visible');
   }
 
+  // ─── Session persistence & visibility ───────────────────────
+
+  setupVisibility() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this._hiddenAt = Date.now();
+        return;
+      }
+      if (!this.trRoom) return;
+      if (this.isHost) {
+        this.broadcastState();
+      } else if (this.hostPeerId && this.sendMsg) {
+        this.sendMsg({ type: 'ping' }, this.hostPeerId);
+      }
+    });
+  }
+
+  saveSession() {
+    if (!this.roomCode) return;
+    try {
+      sessionStorage.setItem('uno-session', JSON.stringify({
+        roomCode: this.roomCode,
+        playerName: this.myName,
+        isHost: this.isHost,
+      }));
+    } catch (_) {}
+  }
+
+  clearSession() {
+    sessionStorage.removeItem('uno-session');
+  }
+
   // ─── UI bindings ─────────────────────────────────────────────
 
   bindUI() {
@@ -503,4 +546,19 @@ function escHtml(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-window.addEventListener('DOMContentLoaded', () => { window.app = new UnoApp(); });
+window.addEventListener('DOMContentLoaded', () => {
+  window.app = new UnoApp();
+  try {
+    const raw = sessionStorage.getItem('uno-session');
+    if (raw) {
+      const { roomCode, playerName, isHost } = JSON.parse(raw);
+      if (playerName) document.getElementById('player-name').value = playerName;
+      if (!isHost && roomCode) {
+        document.getElementById('room-code-input').value = roomCode;
+        window.app.showToast(`Tap "Join →" to rejoin ${roomCode}`, 'info');
+      }
+    }
+  } catch (_) {
+    sessionStorage.removeItem('uno-session');
+  }
+});

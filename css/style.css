@@ -336,7 +336,7 @@ input {
 #screen-game {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
   padding: 0;
-  grid-template-rows: auto auto 1fr auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   height: 100dvh;
   overflow: hidden;
 }
@@ -880,29 +880,83 @@ input {
 .toast.toast-info  { background: linear-gradient(135deg, #2b4c7e, #2b6cb0); }
 
 /* ── RESPONSIVE ──────────────────────────────────────────────── */
+
+/* ─ Small phones (≤ 480px, portrait) */
 @media (max-width: 480px) {
   :root {
-    --card-w: 60px;
-    --card-h: 90px;
+    --card-w: 56px;
+    --card-h: 84px;
   }
-  .c-sym { font-size: 16px; }
-  .c-corner { font-size: 11px; }
-  .card-sm { width: 28px; height: 42px; }
-  .game-info-bar { gap: 7px; padding: 8px 10px; }
-  #last-action { max-width: 130px; font-size: 11px; }
-  .game-center { gap: 16px; padding: 6px 10px; }
-  .hand-actions { gap: 8px; }
-  #btn-draw, #btn-pass { padding: 10px 18px; font-size: 13px; min-width: 110px; }
-  .btn-uno { padding: 10px 22px; font-size: 14px; }
+
+  /* Info bar: single line, hide text labels to save space */
+  .game-info-bar {
+    flex-wrap: nowrap;
+    padding: 6px 10px;
+    min-height: 40px;
+    gap: 6px;
+    overflow: hidden;
+  }
+  #dir-label, #color-label { display: none; }
+  .dir-badge, .color-badge { padding: 4px 8px; }
+  #last-action { max-width: none; flex: 1; font-size: 11px; text-align: right; }
+
+  /* Opponents */
+  #opponents-area { padding: 6px 10px; gap: 6px; }
+  .opponent-slot { padding: 6px 10px; }
+  .opp-header { margin-bottom: 4px; gap: 6px; }
+  .opp-avatar { width: 26px; height: 26px; font-size: 11px; }
+  .opp-name { font-size: 12px; }
+  .card-sm { width: 22px; height: 33px; }
+
+  /* Game center */
+  .game-center { gap: 10px; padding: 4px 8px; }
+  .pile-label { font-size: 10px; }
+  .turn-indicator { font-size: 12px; }
+  .turn-indicator.my-turn { font-size: 13px; }
+
+  /* Card internals */
+  .c-sym { font-size: 15px; }
+  .c-corner { font-size: 10px; }
+  .c-tl { top: 4px; left: 5px; }
+  .c-br { bottom: 4px; right: 5px; }
+
+  /* My hand & actions */
+  .my-area { padding: 6px 10px; gap: 6px; }
+  #my-hand { gap: 4px; padding: 6px 2px 2px; }
+  .hand-actions { gap: 6px; flex-wrap: nowrap; }
+  #btn-draw, #btn-pass {
+    flex: 1;
+    padding: 11px 8px;
+    font-size: 13px;
+    min-width: 0;
+    border-radius: 40px;
+  }
+  .btn-uno { padding: 11px 16px; font-size: 13px; }
 }
 
+/* ─ Very small phones (≤ 360px) */
+@media (max-width: 360px) {
+  :root { --card-w: 48px; --card-h: 72px; }
+  .c-sym { font-size: 13px; }
+}
+
+/* ─ Landscape phones (short screens) */
+@media (max-height: 480px) and (orientation: landscape) {
+  :root { --card-w: 52px; --card-h: 78px; }
+  .game-info-bar { padding: 4px 10px; min-height: 36px; }
+  #dir-label, #color-label { display: none; }
+  .game-center { padding: 2px 8px; gap: 10px; }
+  .pile-label { display: none; }
+  .my-area { padding: 4px 10px; gap: 4px; }
+  #my-hand { padding: 4px 2px 2px; }
+  #opponents-area { padding: 4px 10px; }
+}
+
+/* ─ Tablets and up */
 @media (min-width: 768px) {
   :root { --card-w: 80px; --card-h: 120px; }
   .c-sym { font-size: 26px; }
   .c-corner { font-size: 14px; }
-  #screen-game {
-    grid-template-rows: auto auto 1fr auto auto;
-  }
   .my-area { padding: 14px 24px; }
   #my-hand { gap: 8px; padding: 10px 6px 6px; }
   .game-center { gap: 32px; }

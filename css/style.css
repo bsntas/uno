@@ -336,11 +336,11 @@ input {
 #screen-game {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
   padding: 0;
-  display: grid;
   grid-template-rows: auto auto 1fr auto auto;
   height: 100dvh;
   overflow: hidden;
 }
+#screen-game.active { display: grid; }
 
 /* Info bar */
 .game-info-bar {

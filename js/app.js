@@ -1,7 +1,16 @@
-import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.0/torrent';
+import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.0/nostr';
 import { canPlay, cardSymbol, cardName, GameRoom } from './uno-engine.js';
 
 const APP_ID = 'bsntas-uno-v1';
+const ROOM_CONFIG = {
+  appId: APP_ID,
+  relayUrls: [
+    'wss://relay.nostr.band',
+    'wss://nos.lol',
+    'wss://relay.damus.io',
+    'wss://relay.primal.net',
+  ],
+};
 
 class UnoApp {
   constructor() {
@@ -51,7 +60,7 @@ class UnoApp {
     this.room = new GameRoom();
     this.room.addPlayer(selfId, this.myName);
 
-    this.trRoom = joinRoom({ appId: APP_ID }, code);
+    this.trRoom = joinRoom(ROOM_CONFIG, code);
     const [sendMsg, onMsg] = this.trRoom.makeAction('msg');
     this.sendMsg = sendMsg;
 
@@ -117,21 +126,21 @@ class UnoApp {
 
     const btnJoin = document.getElementById('btn-join');
     btnJoin.disabled = true;
-    btnJoin.textContent = 'Connecting…';
+    btnJoin.textContent = 'Searching…';
 
-    this.trRoom = joinRoom({ appId: APP_ID }, code);
+    this.trRoom = joinRoom(ROOM_CONFIG, code);
     const [sendMsg, onMsg] = this.trRoom.makeAction('msg');
     this.sendMsg = sendMsg;
 
     const joinTimeout = setTimeout(() => {
       if (!this.hostPeerId) {
-        this.showToast('Room "' + code + '" not found', 'error');
+        this.showToast('Room "' + code + '" not found — check the code and retry', 'error');
         btnJoin.disabled = false;
         btnJoin.textContent = 'Join →';
         this.trRoom?.leave?.();
         this.trRoom = null;
       }
-    }, 20000);
+    }, 30000);
 
     this.trRoom.onPeerLeave(peerId => {
       if (peerId === this.hostPeerId && this.publicState?.phase !== 'game_over') {

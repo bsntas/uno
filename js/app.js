@@ -1,18 +1,21 @@
+import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.0/torrent';
+import { canPlay, cardSymbol, cardName, GameRoom } from './uno-engine.js';
+
+const APP_ID = 'bsntas-uno-v1';
+
 class UnoApp {
   constructor() {
-    this.peer = null;
-    this.myId = null;
     this.myName = '';
     this.isHost = false;
-    this.connections = new Map();
-    this.hostConn = null;
-    this.room = null;
+    this.room = null;        // GameRoom (host only)
+    this.trRoom = null;      // Trystero room
+    this.sendMsg = null;     // Trystero send fn
+    this.hostPeerId = null;  // guest only
     this.publicState = null;
     this.myHand = [];
     this.drawnCardIndex = null;
     this.pendingWild = null;
     this._toastTimer = null;
-
     this.bindUI();
   }
 
@@ -35,48 +38,62 @@ class UnoApp {
     this._toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
   }
 
-  // ─── PeerJS helpers ──────────────────────────────────────────
-
-  makePeer(id) {
-    return new Promise((resolve, reject) => {
-      const peer = id ? new Peer(id) : new Peer();
-      const t = setTimeout(() => { peer.destroy(); reject(new Error('Timeout')); }, 12000);
-      peer.on('open', () => { clearTimeout(t); resolve(peer); });
-      peer.on('error', err => { clearTimeout(t); reject(err); });
-    });
-  }
-
   // ─── Host flow ───────────────────────────────────────────────
 
-  async createGame() {
+  createGame() {
     const name = document.getElementById('player-name').value.trim();
     if (!name) { this.showToast('Enter your name', 'error'); return; }
 
-    document.getElementById('btn-create').disabled = true;
-    document.getElementById('btn-create').textContent = 'Connecting…';
-
-    const code = this.genCode();
-    try {
-      this.peer = await this.makePeer(code);
-    } catch (e) {
-      this.showToast('Could not create room: ' + e.message, 'error');
-      document.getElementById('btn-create').disabled = false;
-      document.getElementById('btn-create').textContent = 'Create Game';
-      return;
-    }
-
-    this.myId = code;
     this.myName = name;
     this.isHost = true;
-    this.room = new GameRoom();
-    this.room.addPlayer(this.myId, this.myName);
 
-    this.peer.on('connection', conn => {
-      conn.on('open', () => {
-        conn.on('data', data => this.onGuestData(conn, data));
-        conn.on('close', () => this.onGuestDisconnect(conn));
-        conn.on('error', () => this.onGuestDisconnect(conn));
-      });
+    const code = this.genCode();
+    this.room = new GameRoom();
+    this.room.addPlayer(selfId, this.myName);
+
+    this.trRoom = joinRoom({ appId: APP_ID }, code);
+    const [sendMsg, onMsg] = this.trRoom.makeAction('msg');
+    this.sendMsg = sendMsg;
+
+    this.trRoom.onPeerJoin(peerId => {
+      // Announce ourselves as host to the new peer
+      sendMsg({ type: 'host-hello', name: this.myName }, peerId);
+    });
+
+    this.trRoom.onPeerLeave(peerId => {
+      const player = this.room.players.find(p => p.id === peerId);
+      if (!player) return;
+      const playerName = player.name;
+      if (this.room.phase === 'lobby') {
+        this.room.removePlayer(peerId);
+        this.renderLobbyPlayers();
+        this.broadcastState();
+      } else {
+        this.showToast(playerName + ' disconnected', 'error');
+        this.room.removePlayer(peerId);
+        if (this.room.players.length < 2) {
+          this.room.phase = 'game_over';
+          this.room.winner = { id: selfId, name: this.myName };
+          this.room.lastAction = playerName + ' left the game';
+        }
+        this.broadcastState();
+      }
+    });
+
+    onMsg((data, peerId) => {
+      if (!this.isHost) return;
+      if (data.type === 'guest-join') {
+        const result = this.room.addPlayer(peerId, data.name);
+        if (result.error) {
+          sendMsg({ type: 'error', message: result.error, fatal: true }, peerId);
+          return;
+        }
+        this.broadcastState();
+        return;
+      }
+      if (data.type === 'action') {
+        this.processAction(peerId, data);
+      }
     });
 
     this.showScreen('lobby');
@@ -88,119 +105,77 @@ class UnoApp {
 
   // ─── Guest flow ──────────────────────────────────────────────
 
-  async joinGame() {
+  joinGame() {
     const name = document.getElementById('player-name').value.trim();
     const code = document.getElementById('room-code-input').value.trim().toUpperCase();
     if (!name) { this.showToast('Enter your name', 'error'); return; }
     if (!code) { this.showToast('Enter a room code', 'error'); return; }
 
-    document.getElementById('btn-join').disabled = true;
-    document.getElementById('btn-join').textContent = 'Connecting…';
-
-    try {
-      this.peer = await this.makePeer(null);
-    } catch (e) {
-      this.showToast('Connection failed: ' + e.message, 'error');
-      document.getElementById('btn-join').disabled = false;
-      document.getElementById('btn-join').textContent = 'Join Game';
-      return;
-    }
-
-    this.myId = this.peer.id;
     this.myName = name;
     this.isHost = false;
+    this.hostPeerId = null;
 
-    const conn = this.peer.connect(code, { reliable: true });
-    this.hostConn = conn;
+    const btnJoin = document.getElementById('btn-join');
+    btnJoin.disabled = true;
+    btnJoin.textContent = 'Connecting…';
+
+    this.trRoom = joinRoom({ appId: APP_ID }, code);
+    const [sendMsg, onMsg] = this.trRoom.makeAction('msg');
+    this.sendMsg = sendMsg;
 
     const joinTimeout = setTimeout(() => {
-      this.showToast('Could not find room "' + code + '"', 'error');
-      document.getElementById('btn-join').disabled = false;
-      document.getElementById('btn-join').textContent = 'Join Game';
-    }, 8000);
+      if (!this.hostPeerId) {
+        this.showToast('Room "' + code + '" not found', 'error');
+        btnJoin.disabled = false;
+        btnJoin.textContent = 'Join →';
+        this.trRoom?.leave?.();
+        this.trRoom = null;
+      }
+    }, 20000);
 
-    conn.on('open', () => {
-      clearTimeout(joinTimeout);
-      conn.send({ type: 'join', name });
-    });
-
-    conn.on('data', data => this.onHostData(data, code));
-
-    conn.on('close', () => {
-      if (this.publicState?.phase !== 'game_over') {
-        this.showToast('Disconnected from host', 'error');
+    this.trRoom.onPeerLeave(peerId => {
+      if (peerId === this.hostPeerId && this.publicState?.phase !== 'game_over') {
+        this.showToast('Host disconnected', 'error');
         setTimeout(() => location.reload(), 2000);
       }
     });
 
-    conn.on('error', err => {
-      clearTimeout(joinTimeout);
-      this.showToast('Connection error: ' + (err.message || err), 'error');
-      document.getElementById('btn-join').disabled = false;
-      document.getElementById('btn-join').textContent = 'Join Game';
-    });
-  }
+    onMsg((data, peerId) => {
+      if (this.isHost) return;
 
-  // ─── Host: handle guest messages ─────────────────────────────
-
-  onGuestData(conn, data) {
-    if (data.type === 'join') {
-      const result = this.room.addPlayer(conn.peer, data.name);
-      if (result.error) {
-        conn.send({ type: 'error', message: result.error });
+      if (data.type === 'host-hello' && !this.hostPeerId) {
+        clearTimeout(joinTimeout);
+        this.hostPeerId = peerId;
+        sendMsg({ type: 'guest-join', name: this.myName }, peerId);
+        this.showScreen('lobby');
+        document.getElementById('room-code-display').textContent = code;
+        document.getElementById('btn-start').style.display = 'none';
+        document.getElementById('waiting-text').style.display = '';
+        btnJoin.disabled = false;
+        btnJoin.textContent = 'Join →';
         return;
       }
-      this.connections.set(conn.peer, conn);
-      conn.send({ type: 'joined', roomCode: this.myId });
-      this.broadcastState();
-      this.renderLobbyPlayers();
-      return;
-    }
-    if (data.type === 'action') {
-      this.processAction(conn.peer, data);
-    }
-  }
 
-  onGuestDisconnect(conn) {
-    const id = conn.peer;
-    this.connections.delete(id);
-    const player = this.room.players.find(p => p.id === id);
-    const playerName = player?.name || 'A player';
+      if (peerId !== this.hostPeerId) return;
 
-    if (this.room.phase === 'lobby') {
-      this.room.removePlayer(id);
-      this.renderLobbyPlayers();
-      this.broadcastState();
-    } else {
-      this.showToast(playerName + ' disconnected', 'error');
-      this.room.removePlayer(id);
-      if (this.room.players.length < 2) {
-        this.room.phase = 'game_over';
-        this.room.winner = { id: this.myId, name: this.myName };
-        this.room.lastAction = playerName + ' left the game';
+      if (data.type === 'state') {
+        this.publicState = data.public;
+        this.myHand = data.hand || [];
+        this.drawnCardIndex = data.drawnCardIndex ?? null;
+        this.render();
+        return;
       }
-      this.broadcastState();
-    }
-  }
 
-  // ─── Guest: handle host messages ─────────────────────────────
-
-  onHostData(data, roomCode) {
-    if (data.type === 'joined') {
-      this.showScreen('lobby');
-      document.getElementById('room-code-display').textContent = data.roomCode || roomCode;
-      document.getElementById('btn-start').style.display = 'none';
-      document.getElementById('waiting-text').style.display = '';
-    }
-    if (data.type === 'state') {
-      this.publicState = data.public;
-      this.myHand = data.hand;
-      this.drawnCardIndex = data.drawnCardIndex ?? null;
-      this.render();
-    }
-    if (data.type === 'error') {
-      this.showToast(data.message, 'error');
-    }
+      if (data.type === 'error') {
+        this.showToast(data.message, 'error');
+        if (data.fatal) {
+          btnJoin.disabled = false;
+          btnJoin.textContent = 'Join →';
+          this.trRoom?.leave?.();
+          this.trRoom = null;
+        }
+      }
+    });
   }
 
   // ─── Action processing (host only) ──────────────────────────
@@ -222,10 +197,11 @@ class UnoApp {
         break;
     }
     if (result?.error) {
-      const conn = this.connections.get(playerId);
-      if (conn) conn.send({ type: 'error', message: result.error });
-      // Also show to self if it's the host
-      if (playerId === this.myId) this.showToast(result.error, 'error');
+      if (playerId === selfId) {
+        this.showToast(result.error, 'error');
+      } else {
+        this.sendMsg({ type: 'error', message: result.error }, playerId);
+      }
       return;
     }
     this.broadcastState();
@@ -233,26 +209,29 @@ class UnoApp {
 
   broadcastState() {
     const pub = this.room.getPublicState();
-    const myPriv = this.room.getPrivateData(this.myId);
+    const myPriv = this.room.getPrivateData(selfId);
     this.publicState = pub;
     this.myHand = myPriv.hand;
     this.drawnCardIndex = myPriv.drawnCardIndex;
 
     for (const player of this.room.players) {
-      if (player.id === this.myId) continue;
-      const conn = this.connections.get(player.id);
-      if (!conn) continue;
+      if (player.id === selfId) continue;
       const priv = this.room.getPrivateData(player.id);
-      conn.send({ type: 'state', public: pub, hand: priv.hand, drawnCardIndex: priv.drawnCardIndex });
+      this.sendMsg({
+        type: 'state',
+        public: pub,
+        hand: priv.hand,
+        drawnCardIndex: priv.drawnCardIndex,
+      }, player.id); // player.id === Trystero peerId for guests
     }
     this.render();
   }
 
   sendAction(action) {
     if (this.isHost) {
-      this.processAction(this.myId, action);
-    } else if (this.hostConn?.open) {
-      this.hostConn.send({ type: 'action', ...action });
+      this.processAction(selfId, action);
+    } else if (this.hostPeerId && this.sendMsg) {
+      this.sendMsg({ type: 'action', ...action }, this.hostPeerId);
     }
   }
 
@@ -290,7 +269,6 @@ class UnoApp {
       this.room.resetToLobby();
       this.broadcastState();
     }
-    // Guests will receive lobby state and render() will switch screen
   }
 
   // ─── Rendering ───────────────────────────────────────────────
@@ -298,19 +276,14 @@ class UnoApp {
   render() {
     if (!this.publicState) return;
     const { phase } = this.publicState;
-
     if (phase === 'lobby') {
       this.showScreen('lobby');
       this.renderLobbyPlayers();
       return;
     }
-
     this.showScreen('game');
     this.renderGame();
-
-    if (phase === 'game_over') {
-      this.showGameOver();
-    }
+    if (phase === 'game_over') this.showGameOver();
   }
 
   renderLobbyPlayers() {
@@ -337,19 +310,18 @@ class UnoApp {
 
   renderGame() {
     const st = this.publicState;
-    const myIdx = st.players.findIndex(p => p.id === this.myId);
+    const myIdx = st.players.findIndex(p => p.id === selfId);
     const isMyTurn = st.currentPlayerIndex === myIdx;
     const myData = st.players[myIdx];
     const curName = st.players[st.currentPlayerIndex]?.name || '';
 
-    // Direction & color
     document.getElementById('dir-arrow').textContent = st.direction === 1 ? '⟳' : '⟲';
     document.getElementById('dir-label').textContent = st.direction === 1 ? 'Clockwise' : 'Counter-CW';
     document.getElementById('color-dot').className = 'color-dot dot-' + st.currentColor;
-    document.getElementById('color-label').textContent = (st.currentColor || '').charAt(0).toUpperCase() + (st.currentColor || '').slice(1);
+    document.getElementById('color-label').textContent =
+      (st.currentColor || '').charAt(0).toUpperCase() + (st.currentColor || '').slice(1);
     document.getElementById('last-action').textContent = st.lastAction;
 
-    // Pending draw banner
     const banner = document.getElementById('pending-banner');
     if (st.pendingDraw > 0 && isMyTurn) {
       banner.textContent = `⚠️  Stack a draw card — or draw ${st.pendingDraw} cards!`;
@@ -358,37 +330,28 @@ class UnoApp {
       banner.style.display = 'none';
     }
 
-    // Turn indicator
-    const turnEl = document.getElementById('turn-indicator');
-    turnEl.textContent = isMyTurn ? '✨ Your Turn!' : `${curName}'s Turn`;
-    turnEl.className = 'turn-indicator' + (isMyTurn ? ' my-turn' : '');
-
-    // Discard pile
     const discardEl = document.getElementById('discard-top');
     if (st.topCard) {
       discardEl.innerHTML = this.cardHTML(st.topCard, {
-        interactive: false,
         overrideColor: st.currentColor,
       });
     }
 
-    // Draw pile count
     document.getElementById('deck-count').textContent = st.deckCount;
 
-    // Opponents
-    this.renderOpponents(st, myIdx);
+    const turnEl = document.getElementById('turn-indicator');
+    turnEl.textContent = isMyTurn ? '✨ Your Turn!' : `${curName}'s Turn`;
+    turnEl.className = 'turn-indicator' + (isMyTurn ? ' my-turn' : '');
 
-    // My hand
+    this.renderOpponents(st, myIdx);
     this.renderHand(st, isMyTurn);
 
-    // Buttons
     const btnDraw = document.getElementById('btn-draw');
     const btnPass = document.getElementById('btn-pass');
-    const btnUno = document.getElementById('btn-uno');
+    const btnUno  = document.getElementById('btn-uno');
 
     btnDraw.style.display = (isMyTurn && !st.waitingForPass) ? '' : 'none';
     btnDraw.textContent = st.pendingDraw > 0 ? `Draw ${st.pendingDraw} cards` : 'Draw Card';
-
     btnPass.style.display = (isMyTurn && st.waitingForPass) ? '' : 'none';
 
     if (myData && myData.cardCount === 1) {
@@ -409,7 +372,8 @@ class UnoApp {
       const shown = Math.min(p.cardCount, 7);
       const cards = Array.from({ length: shown }, () =>
         `<div class="card card-back card-sm"></div>`).join('');
-      const extra = p.cardCount > 7 ? `<span class="extra-badge">+${p.cardCount - 7}</span>` : '';
+      const extra = p.cardCount > 7
+        ? `<span class="extra-badge">+${p.cardCount - 7}</span>` : '';
 
       return `
         <div class="opponent-slot${isCurrent ? ' active-player' : ''}">
@@ -451,20 +415,17 @@ class UnoApp {
 
   cardHTML(card, opts = {}) {
     const { index = -1, playable = false, dimmed = false, isDrawn = false,
-            interactive = true, overrideColor = null } = opts;
+            overrideColor = null } = opts;
     const sym = cardSymbol(card);
     const isWild = card.type === 'wild' || card.type === 'wild4';
-    const colorClass = `card-${card.color}`;
 
-    const classes = ['card', colorClass,
+    const classes = ['card', `card-${card.color}`,
       playable ? 'playable' : '',
-      dimmed ? 'dimmed' : '',
-      isDrawn ? 'drawn-card' : '',
+      dimmed    ? 'dimmed'   : '',
+      isDrawn   ? 'drawn-card' : '',
     ].filter(Boolean).join(' ');
 
     const dataIdx = index >= 0 ? `data-index="${index}"` : '';
-
-    // Color bar for wild cards that have a chosen color
     const colorBar = isWild && overrideColor
       ? `<div class="wild-bar bar-${overrideColor}"></div>` : '';
 
@@ -478,7 +439,7 @@ class UnoApp {
 
   showGameOver() {
     const st = this.publicState;
-    const isWinner = st.winner?.id === this.myId;
+    const isWinner = st.winner?.id === selfId;
     document.getElementById('go-title').textContent = isWinner ? '🏆 You Win!' : 'Game Over!';
     document.getElementById('go-msg').textContent = isWinner
       ? 'Amazing — you played all your cards first!'
@@ -534,10 +495,8 @@ class UnoApp {
 
 function escHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 window.addEventListener('DOMContentLoaded', () => { window.app = new UnoApp(); });

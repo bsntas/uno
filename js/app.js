@@ -1,15 +1,10 @@
-import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.0/nostr';
+import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.0/mqtt';
 import { canPlay, cardSymbol, cardName, GameRoom } from './uno-engine.js';
 
 const APP_ID = 'bsntas-uno-v1';
 const ROOM_CONFIG = {
   appId: APP_ID,
-  relayUrls: [
-    'wss://relay.nostr.band',
-    'wss://nos.lol',
-    'wss://relay.damus.io',
-    'wss://relay.primal.net',
-  ],
+  brokerUrl: 'wss://broker.hivemq.com:8884/mqtt',
 };
 
 class UnoApp {

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#16613a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>UNO — Multiplayer</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════ HOME ═══════════════════════════════ -->
+  <div id="screen-home" class="screen active">
+    <div class="home-wrap">
+
+      <div class="logo">
+        <span class="logo-uno">UNO</span>
+        <span class="logo-sub">Multiplayer</span>
+      </div>
+
+      <div class="card-stack">
+        <div class="deco-card"></div>
+        <div class="deco-card"></div>
+        <div class="deco-card"></div>
+        <div class="deco-card"></div>
+      </div>
+
+      <div class="home-form">
+        <div class="input-group">
+          <span class="icon">👤</span>
+          <input id="player-name" type="text" placeholder="Your name…" maxlength="20" autocomplete="off">
+        </div>
+
+        <button id="btn-create" class="btn-primary">Create Game</button>
+
+        <div class="divider">OR JOIN</div>
+
+        <div class="join-row">
+          <div class="input-group">
+            <span class="icon">🔑</span>
+            <input id="room-code-input" type="text" placeholder="Room code…" maxlength="6" autocomplete="off">
+          </div>
+          <button id="btn-join" class="btn-join-go">Join →</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════ LOBBY ════════════════════════════════ -->
+  <div id="screen-lobby" class="screen">
+    <div class="lobby-wrap">
+
+      <div class="lobby-header">
+        <h2>Game Lobby</h2>
+        <p>Share the room code with your friends</p>
+      </div>
+
+      <div class="code-card">
+        <div>
+          <div class="code-label">Room Code</div>
+          <div class="code-value" id="room-code-display">——————</div>
+        </div>
+        <button id="btn-copy" class="btn-copy">📋 Copy</button>
+      </div>
+
+      <div class="players-section">
+        <div class="players-header">
+          <h3>Players</h3>
+          <span id="player-count">0 / 6 players</span>
+        </div>
+        <div id="player-list"></div>
+      </div>
+
+      <div class="lobby-actions">
+        <button id="btn-start" class="btn-primary" style="display:none" disabled>
+          Waiting for players…
+        </button>
+        <p id="waiting-text" style="text-align:center;color:var(--text-muted);font-size:14px;padding:8px">
+          ⏳ Waiting for the host to start the game…
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════ GAME ════════════════════════════════ -->
+  <div id="screen-game" class="screen">
+
+    <!-- Info bar -->
+    <div class="game-info-bar">
+      <div class="dir-badge">
+        <span id="dir-arrow">⟳</span>
+        <span id="dir-label">Clockwise</span>
+      </div>
+      <div class="color-badge">
+        <div id="color-dot" class="color-dot dot-wild"></div>
+        <span id="color-label">Wild</span>
+      </div>
+      <div class="info-sep"></div>
+      <span id="last-action"></span>
+    </div>
+
+    <!-- Pending draw warning -->
+    <div id="pending-banner" style="display:none"></div>
+
+    <!-- Opponents -->
+    <div id="opponents-area"></div>
+
+    <!-- Center: piles + turn indicator -->
+    <div class="game-center">
+      <div class="pile-wrap">
+        <div class="pile-slot">
+          <div class="deck-card" id="deck-pile">
+            <span class="deck-card-label">DRAW</span>
+            <span class="deck-card-uno">UNO</span>
+          </div>
+        </div>
+        <span class="pile-label"><span id="deck-count">108</span> cards</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div id="turn-indicator" class="turn-indicator">—</div>
+      </div>
+
+      <div class="pile-wrap">
+        <div class="pile-slot" id="discard-top"></div>
+        <span class="pile-label">Discard</span>
+      </div>
+    </div>
+
+    <!-- My hand -->
+    <div class="my-area">
+      <div id="my-hand"></div>
+      <div class="hand-actions">
+        <button class="btn-uno" id="btn-uno" style="display:none">UNO!</button>
+        <button id="btn-draw">Draw Card</button>
+        <button id="btn-pass" style="display:none">Pass Turn</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════ MODAL: Color picker ════════════════════ -->
+  <div id="modal-color" class="modal">
+    <div class="modal-box">
+      <h3>Choose a Color</h3>
+      <div class="color-grid">
+        <button class="color-choice" data-color="red">🔴 Red</button>
+        <button class="color-choice" data-color="blue">🔵 Blue</button>
+        <button class="color-choice" data-color="green">🟢 Green</button>
+        <button class="color-choice" data-color="yellow">🟡 Yellow</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ MODAL: Game over ════════════════════════ -->
+  <div id="modal-gameover" class="modal">
+    <div class="modal-box">
+      <h2 id="go-title">Game Over!</h2>
+      <p id="go-msg"></p>
+      <button class="btn-play-again" id="btn-play-again">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="js/uno-engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

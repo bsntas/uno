@@ -940,8 +940,10 @@ input {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-.toast.toast-error { background: linear-gradient(135deg, #9b2c2c, #c53030); }
-.toast.toast-info  { background: linear-gradient(135deg, #2b4c7e, #2b6cb0); }
+.toast.toast-error   { background: linear-gradient(135deg, #9b2c2c, #c53030); }
+.toast.toast-info    { background: linear-gradient(135deg, #2b4c7e, #2b6cb0); }
+.toast.toast-warn    { background: linear-gradient(135deg, #7b4f00, #c07c00); }
+.toast.toast-success { background: linear-gradient(135deg, #1a5c2e, #276749); }
 
 /* ── RESPONSIVE ──────────────────────────────────────────────── */
 

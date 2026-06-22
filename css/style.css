@@ -24,7 +24,11 @@
 }
 
 html, body {
+  /* Lock body to match exactly what the browser shows — no more, no less.
+     Combined with position:fixed on .screen, this prevents any content
+     from sitting outside the visible area when browser chrome shifts. */
   height: 100%;
+  max-height: -webkit-fill-available; /* iOS Safari: matches visible viewport */
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: radial-gradient(ellipse at top, var(--felt-light), var(--felt-dark) 80%);
   color: var(--text);
@@ -52,7 +56,11 @@ input {
 
 /* ── Screens ─────────────────────────────────────────────────── */
 .screen {
-  position: fixed; inset: 0;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  /* Use JS-measured innerHeight so the screen matches exactly what the
+     browser window shows, regardless of address-bar / nav-bar state. */
+  height: var(--app-h, 100svh);
   display: none;
   flex-direction: column;
   align-items: center;
@@ -337,7 +345,9 @@ input {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
   padding: 0;
   grid-template-rows: auto auto auto 1fr auto;
-  height: 100dvh;
+  /* No explicit height — position:fixed + inset:0 (from .screen) already
+     pins all four edges to the visual viewport, so the grid fills it
+     exactly without reacting to browser-chrome show/hide. */
   overflow: hidden;
 }
 #screen-game.active { display: grid; }

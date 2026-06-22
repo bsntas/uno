@@ -428,6 +428,8 @@ class UnoApp {
     const canFilter = isMyTurn && playable.length > 0 && playable.length < cardStates.length;
     const visible = (!this.showAllCards && canFilter) ? playable : cardStates;
 
+    el.classList.toggle('wrap', this.showAllCards);
+
     el.innerHTML = visible.map(c => this.cardHTML(c.card, {
       index: c.i,
       playable: c.canPlay,

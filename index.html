@@ -8,6 +8,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>UNO — Multiplayer</title>
   <link rel="stylesheet" href="css/style.css">
+  <!-- Lock viewport size before first paint: prevents iOS Safari jump on load -->
+  <script>
+    (function () {
+      function setVH() {
+        document.documentElement.style.setProperty('--app-h', window.innerHeight + 'px');
+      }
+      setVH();
+      window.addEventListener('resize', setVH);
+    })();
+  </script>
 </head>
 <body>
 

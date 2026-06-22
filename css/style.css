@@ -341,11 +341,11 @@ input {
 #screen-game {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
   padding: 0;
-  grid-template-rows: auto auto auto auto auto;
-  align-content: space-between;
+  align-items: stretch;
+  justify-content: flex-start;
   overflow: hidden;
 }
-#screen-game.active { display: grid; }
+#screen-game.active { display: flex; }
 
 /* Info bar */
 .game-info-bar {
@@ -425,8 +425,9 @@ input {
 }
 @keyframes flash { from { opacity: 1; } to { opacity: .75; } }
 
-/* Opponents */
+/* Opponents — flex-shrink:0 keeps it compact below the info bar */
 #opponents-area {
+  flex-shrink: 0;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -500,8 +501,9 @@ input {
   overflow: hidden;
 }
 
-/* Center area */
+/* Center area — flex:1 absorbs spare vertical space */
 .game-center {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -589,8 +591,9 @@ input {
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .6; } }
 
-/* My hand area */
+/* My hand area — flex-shrink:0 keeps it compact at the bottom */
 .my-area {
+  flex-shrink: 0;
   background: rgba(0,0,0,.25);
   border-top: 1px solid rgba(255,255,255,.08);
   padding: 10px 12px;

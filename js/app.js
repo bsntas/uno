@@ -1,5 +1,5 @@
 import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.0/mqtt';
-import { canPlay, cardSymbol, cardName, GameRoom } from './uno-engine.js';
+import { DARK_COLORS, activeProps, canPlay, cardSymbol, cardName, GameRoom } from './uno-engine.js';
 
 const APP_ID = 'bsntas-uno-v1';
 const ROOM_CONFIG = {
@@ -26,6 +26,10 @@ class UnoApp {
     this._disconnectTimers = new Map();
     this._reconnecting = false;
     this._heartbeatInterval = null;
+    // Animation state tracking
+    this._prevTopCardId = null;
+    this._prevDirection = null;
+    this._prevHandCount = -1;
     this.bindUI();
     this.setupVisibility();
   }
@@ -148,6 +152,7 @@ class UnoApp {
     document.getElementById('room-code-display').textContent = code;
     document.getElementById('btn-start').style.display = '';
     document.getElementById('waiting-text').style.display = 'none';
+    document.getElementById('flip-toggle-wrap').style.display = '';
     this.saveSession();
     this.renderLobbyPlayers();
   }
@@ -201,6 +206,7 @@ class UnoApp {
         document.getElementById('room-code-display').textContent = code;
         document.getElementById('btn-start').style.display = 'none';
         document.getElementById('waiting-text').style.display = '';
+        document.getElementById('flip-toggle-wrap').style.display = 'none';
         btnJoin.disabled = false;
         btnJoin.textContent = 'Join →';
         this.saveSession();
@@ -292,7 +298,7 @@ class UnoApp {
         public: pub,
         hand: priv.hand,
         drawnCardIndex: priv.drawnCardIndex,
-      }, player.id); // player.id === Trystero peerId for guests
+      }, player.id);
     }
     this.render();
   }
@@ -309,6 +315,9 @@ class UnoApp {
 
   startGame() {
     if (!this.isHost) return;
+    // Apply flip mode setting before starting
+    const flipToggle = document.getElementById('flip-mode-toggle');
+    this.room.setFlipMode(flipToggle?.checked || false);
     const result = this.room.startGame();
     if (result.error) { this.showToast(result.error, 'error'); return; }
     this.broadcastState();
@@ -317,12 +326,55 @@ class UnoApp {
   onCardClick(cardIndex) {
     const card = this.myHand[cardIndex];
     if (!card) return;
-    if (card.type === 'wild' || card.type === 'wild4') {
-      this.pendingWild = { cardIndex };
-      document.getElementById('modal-color').classList.add('visible');
+    const side = this.publicState?.currentSide || 'light';
+    const { type } = activeProps(card, side);
+
+    if (type === 'wild' || type === 'wild4' || type === 'wildcolor') {
+      this._openColorPicker(cardIndex);
       return;
     }
+    // Flip card plays immediately with no color choice
     this.sendAction({ action: 'play_card', cardIndex, chosenColor: null });
+  }
+
+  _openColorPicker(cardIndex) {
+    const side = this.publicState?.currentSide || 'light';
+    const lightColors = ['red', 'blue', 'green', 'yellow'];
+    const darkColors  = ['pink', 'teal', 'orange', 'purple'];
+    const activeColors = side === 'dark' ? darkColors : lightColors;
+
+    const emoji = { red:'🔴', blue:'🔵', green:'🟢', yellow:'🟡',
+                    pink:'🩷', teal:'🩵', orange:'🟠', purple:'🟣' };
+    const label = { red:'Red', blue:'Blue', green:'Green', yellow:'Yellow',
+                    pink:'Pink', teal:'Teal', orange:'Orange', purple:'Purple' };
+    const dotClass = { red:'dot-red', blue:'dot-blue', green:'dot-green', yellow:'dot-yellow',
+                       pink:'dot-pink', teal:'dot-teal', orange:'dot-orange', purple:'dot-purple' };
+
+    // Count hand colours for the current side
+    const counts = {};
+    for (const c of activeColors) counts[c] = 0;
+    for (const hc of this.myHand) {
+      const hProps = activeProps(hc, side);
+      if (counts[hProps.color] !== undefined) counts[hProps.color]++;
+    }
+
+    // Update colour buttons
+    document.querySelectorAll('.color-choice').forEach((btn, i) => {
+      const c = activeColors[i];
+      btn.dataset.color = c;
+      btn.textContent = `${emoji[c]} ${label[c]}`;
+    });
+
+    // Render hand summary
+    const summary = document.getElementById('hand-color-summary');
+    summary.innerHTML = activeColors.map(c => `
+      <div class="hcs-item">
+        <div class="hcs-dot ${dotClass[c]}"></div>
+        <span class="hcs-count">${counts[c]}</span>
+      </div>`).join('');
+
+    this.pendingWild = { cardIndex };
+    document.getElementById('modal-color').classList.add('visible');
   }
 
   playWild(color) {
@@ -335,6 +387,9 @@ class UnoApp {
 
   playAgain() {
     this.showAllCards = false;
+    this._prevTopCardId = null;
+    this._prevDirection = null;
+    this._prevHandCount = -1;
     document.getElementById('modal-gameover').classList.remove('visible');
     if (this.isHost) {
       this.room.resetToLobby();
@@ -376,11 +431,15 @@ class UnoApp {
       document.getElementById('btn-start').textContent =
         players.length >= 2 ? 'Start Game' : 'Waiting for players…';
       document.getElementById('btn-start').disabled = players.length < 2;
+      document.getElementById('flip-toggle-wrap').style.display = '';
+    } else {
+      document.getElementById('flip-toggle-wrap').style.display = 'none';
     }
   }
 
   renderGame() {
     const st = this.publicState;
+    const side = st.currentSide || 'light';
     const myIdx = st.players.findIndex(p => p.id === selfId);
     const isMyTurn = st.currentPlayerIndex === myIdx;
     const myData = st.players[myIdx];
@@ -388,10 +447,31 @@ class UnoApp {
 
     document.getElementById('dir-arrow').textContent = st.direction === 1 ? '⟳' : '⟲';
     document.getElementById('dir-label').textContent = st.direction === 1 ? 'Clockwise' : 'Counter-CW';
+
+    // Flash direction badge when direction changes
+    if (this._prevDirection !== null && st.direction !== this._prevDirection) {
+      const badge = document.getElementById('dir-badge');
+      badge.classList.remove('dir-flash');
+      void badge.offsetWidth; // reflow to restart animation
+      badge.classList.add('dir-flash');
+      setTimeout(() => badge.classList.remove('dir-flash'), 600);
+    }
+    this._prevDirection = st.direction;
+
     document.getElementById('color-dot').className = 'color-dot dot-' + st.currentColor;
     document.getElementById('color-label').textContent =
       (st.currentColor || '').charAt(0).toUpperCase() + (st.currentColor || '').slice(1);
     document.getElementById('last-action').textContent = st.lastAction;
+
+    // Flip side badge
+    const flipBadge = document.getElementById('flip-side-badge');
+    if (st.flipMode) {
+      flipBadge.style.display = '';
+      flipBadge.textContent = side === 'dark' ? '🌑 Dark' : '☀️ Light';
+      flipBadge.className = `flip-side-badge side-${side}`;
+    } else {
+      flipBadge.style.display = 'none';
+    }
 
     const banner = document.getElementById('pending-banner');
     if (st.pendingDraw > 0 && isMyTurn) {
@@ -401,11 +481,16 @@ class UnoApp {
       banner.style.display = 'none';
     }
 
+    // Discard pile — animate card landing when top card changes
     const discardEl = document.getElementById('discard-top');
     if (st.topCard) {
+      const isNewCard = st.topCard.id !== this._prevTopCardId;
       discardEl.innerHTML = this.cardHTML(st.topCard, {
         overrideColor: st.currentColor,
+        side,
+        animLand: isNewCard,
       });
+      this._prevTopCardId = st.topCard.id;
     }
 
     document.getElementById('deck-count').textContent = st.deckCount;
@@ -415,7 +500,7 @@ class UnoApp {
     turnEl.className = 'turn-indicator' + (isMyTurn ? ' my-turn' : '');
 
     this.renderOpponents(st, myIdx);
-    this.renderHand(st, isMyTurn);
+    this.renderHand(st, isMyTurn, side);
 
     const btnDraw = document.getElementById('btn-draw');
     const btnPass = document.getElementById('btn-pass');
@@ -462,12 +547,12 @@ class UnoApp {
     }).join('');
   }
 
-  renderHand(st, isMyTurn) {
+  renderHand(st, isMyTurn, side) {
     const el = document.getElementById('my-hand');
     const toggleBtn = document.getElementById('btn-toggle-cards');
 
     const cardStates = this.myHand.map((card, i) => {
-      const playable = isMyTurn && canPlay(card, st.topCard, st.currentColor, st.pendingDraw);
+      const playable = isMyTurn && canPlay(card, st.topCard, st.currentColor, st.pendingDraw, side);
       const restricted = this.drawnCardIndex !== null && i !== this.drawnCardIndex;
       return {
         card, i,
@@ -478,17 +563,25 @@ class UnoApp {
     });
 
     const playable = cardStates.filter(c => c.canPlay || c.isDrawn);
-    // Only filter when some cards are playable AND some are not
     const canFilter = isMyTurn && playable.length > 0 && playable.length < cardStates.length;
     const visible = (!this.showAllCards && canFilter) ? playable : cardStates;
 
     el.classList.toggle('wrap', this.showAllCards || !isMyTurn);
 
+    // Detect hand growth → animate new cards sliding in
+    const newCount = this.myHand.length;
+    const prevCount = this._prevHandCount;
+    const handGrew = prevCount >= 0 && newCount > prevCount;
+    const newCardStart = handGrew ? prevCount : newCount; // index of first new card in myHand
+    this._prevHandCount = newCount;
+
     el.innerHTML = visible.map(c => this.cardHTML(c.card, {
       index: c.i,
       playable: c.canPlay,
-      dimmed: this.showAllCards && c.dimmed,
+      dimmed: (this.showAllCards || !isMyTurn) && c.dimmed,
       isDrawn: c.isDrawn,
+      side,
+      animDeal: handGrew && c.i >= newCardStart,
     })).join('');
 
     el.querySelectorAll('.card[data-index]').forEach(cardEl => {
@@ -512,28 +605,33 @@ class UnoApp {
     this.showAllCards = !this.showAllCards;
     if (this.publicState) {
       const st = this.publicState;
+      const side = st.currentSide || 'light';
       const myIdx = st.players.findIndex(p => p.id === selfId);
-      this.renderHand(st, st.currentPlayerIndex === myIdx);
+      this.renderHand(st, st.currentPlayerIndex === myIdx, side);
     }
   }
 
   cardHTML(card, opts = {}) {
     const { index = -1, playable = false, dimmed = false, isDrawn = false,
-            overrideColor = null } = opts;
-    const sym = cardSymbol(card);
-    const isWild = card.type === 'wild' || card.type === 'wild4';
+            overrideColor = null, side = 'light', animLand = false, animDeal = false } = opts;
 
-    const classes = ['card', `card-${card.color}`,
-      playable ? 'playable' : '',
-      dimmed    ? 'dimmed'   : '',
+    const { color, type } = activeProps(card, side);
+    const sym = cardSymbol(card, side);
+    const isWild = type === 'wild' || type === 'wild4' || type === 'wildcolor' || color === 'dark-wild';
+
+    const classes = ['card', `card-${color}`,
+      playable  ? 'playable'   : '',
+      dimmed    ? 'dimmed'     : '',
       isDrawn   ? 'drawn-card' : '',
+      animLand  ? 'discard-land' : '',
+      animDeal  ? 'card-deal-in' : '',
     ].filter(Boolean).join(' ');
 
     const dataIdx = index >= 0 ? `data-index="${index}"` : '';
     const colorBar = isWild && overrideColor
       ? `<div class="wild-bar bar-${overrideColor}"></div>` : '';
 
-    return `<div class="${classes}" ${dataIdx} title="${cardName(card)}">
+    return `<div class="${classes}" ${dataIdx} title="${cardName(card, side)}">
       ${colorBar}
       <span class="c-corner c-tl">${sym}</span>
       <div class="c-center"><span class="c-sym">${sym}</span></div>
@@ -610,7 +708,15 @@ class UnoApp {
 
     $('btn-start').addEventListener('click', () => this.startGame());
 
-    $('btn-draw').addEventListener('click', () => this.sendAction({ action: 'draw_card' }));
+    $('btn-draw').addEventListener('click', () => {
+      // Bounce the deck visually
+      const deck = $('deck-pile');
+      deck.classList.remove('deck-bounce');
+      void deck.offsetWidth;
+      deck.classList.add('deck-bounce');
+      setTimeout(() => deck.classList.remove('deck-bounce'), 400);
+      this.sendAction({ action: 'draw_card' });
+    });
     $('btn-pass').addEventListener('click', () => this.sendAction({ action: 'pass_turn' }));
     $('btn-uno').addEventListener('click', () => this.sendAction({ action: 'call_uno' }));
 
@@ -627,6 +733,13 @@ class UnoApp {
 
     $('btn-play-again').addEventListener('click', () => this.playAgain());
     $('btn-toggle-cards').addEventListener('click', () => this.toggleCardView());
+
+    // Flip mode toggle (host only, visible in lobby)
+    $('flip-mode-toggle').addEventListener('change', e => {
+      if (this.isHost && this.room) {
+        this.room.setFlipMode(e.target.checked);
+      }
+    });
   }
 }
 

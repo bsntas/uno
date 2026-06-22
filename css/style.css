@@ -588,7 +588,8 @@ input {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 8px 4px 4px;
+  padding: 20px 8px 6px; /* 20px top = room for playable card lift (max 14px on hover) */
+  scroll-snap-type: x proximity;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,.2) transparent;
   -webkit-overflow-scrolling: touch;
@@ -648,6 +649,25 @@ input {
   50% { box-shadow: 0 4px 28px rgba(229,62,62,.8); }
 }
 
+.btn-toggle-cards {
+  padding: 12px 18px;
+  border-radius: 50px;
+  background: rgba(255,255,255,.08);
+  border: 1.5px solid rgba(255,255,255,.2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  min-width: 110px;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.btn-toggle-cards:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); }
+.btn-toggle-cards.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(245,200,66,.1);
+}
+
 /* ── CARDS ──────────────────────────────────────────────────── */
 .card {
   flex-shrink: 0;
@@ -661,14 +681,22 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
+  scroll-snap-align: start;
 }
 
-/* Card colors */
-.card-red    { background: linear-gradient(145deg, #fc8181, #e53e3e 45%, #9b2c2c); }
-.card-blue   { background: linear-gradient(145deg, #63b3ed, #3182ce 45%, #1a365d); }
-.card-green  { background: linear-gradient(145deg, #68d391, #38a169 45%, #1c4532); }
-.card-yellow { background: linear-gradient(145deg, #f6e05e, #d69e2e 45%, #744210); }
-.card-wild   { background: conic-gradient(from 180deg, #e53e3e 0 25%, #3182ce 25% 50%, #38a169 50% 75%, #d69e2e 75%); }
+/* Card colors — vivid, clearly distinct */
+.card-red    { background: linear-gradient(145deg, #ff7675, #d63031 45%, #922020); }
+.card-blue   { background: linear-gradient(145deg, #74b9ff, #0052cc 45%, #003285); }
+.card-green  { background: linear-gradient(145deg, #55efc4, #00b248 45%, #006b2e); }
+.card-yellow { background: linear-gradient(145deg, #ffeaa7, #ffd32a 45%, #b8860b); }
+.card-wild   { background: conic-gradient(from 180deg, #d63031 0 25%, #0052cc 25% 50%, #00b248 50% 75%, #ffd32a 75%); }
+
+/* Yellow is too light for white text — use dark ink */
+.card-yellow .c-corner,
+.card-yellow .c-sym {
+  color: rgba(0,0,0,.75);
+  text-shadow: 0 1px 2px rgba(255,255,255,.15);
+}
 
 /* Card back */
 .card-back {
@@ -921,8 +949,8 @@ input {
   .c-br { bottom: 4px; right: 5px; }
 
   /* My hand & actions */
-  .my-area { padding: 6px 10px; gap: 6px; }
-  #my-hand { gap: 4px; padding: 6px 2px 2px; }
+  .my-area { padding: 0 10px 8px; gap: 6px; }
+  #my-hand { gap: 4px; padding: 18px 6px 4px; }
   .hand-actions { gap: 6px; flex-wrap: nowrap; }
   #btn-draw, #btn-pass {
     flex: 1;
@@ -932,6 +960,13 @@ input {
     border-radius: 40px;
   }
   .btn-uno { padding: 11px 16px; font-size: 13px; }
+  .btn-toggle-cards {
+    padding: 11px 10px;
+    font-size: 11px;
+    min-width: 0;
+    flex-shrink: 0;
+    border-radius: 40px;
+  }
 }
 
 /* ─ Very small phones (≤ 360px) */
@@ -947,8 +982,8 @@ input {
   #dir-label, #color-label { display: none; }
   .game-center { padding: 2px 8px; gap: 10px; }
   .pile-label { display: none; }
-  .my-area { padding: 4px 10px; gap: 4px; }
-  #my-hand { padding: 4px 2px 2px; }
+  .my-area { padding: 0 10px 6px; gap: 4px; }
+  #my-hand { padding: 16px 6px 2px; }
   #opponents-area { padding: 4px 10px; }
 }
 
@@ -958,7 +993,7 @@ input {
   .c-sym { font-size: 26px; }
   .c-corner { font-size: 14px; }
   .my-area { padding: 14px 24px; }
-  #my-hand { gap: 8px; padding: 10px 6px 6px; }
+  #my-hand { gap: 8px; padding: 20px 8px 6px; }
   .game-center { gap: 32px; }
   #opponents-area { flex-direction: row; flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
   .opponent-slot { flex: 1; min-width: 200px; }

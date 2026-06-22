@@ -22,6 +22,7 @@ class UnoApp {
     this.pendingWild = null;
     this._toastTimer = null;
     this._hiddenAt = 0;
+    this.showAllCards = false;
     this.bindUI();
     this.setupVisibility();
   }
@@ -279,6 +280,7 @@ class UnoApp {
   }
 
   playAgain() {
+    this.showAllCards = false;
     document.getElementById('modal-gameover').classList.remove('visible');
     if (this.isHost) {
       this.room.resetToLobby();
@@ -408,24 +410,55 @@ class UnoApp {
 
   renderHand(st, isMyTurn) {
     const el = document.getElementById('my-hand');
-    el.innerHTML = this.myHand.map((card, i) => {
+    const toggleBtn = document.getElementById('btn-toggle-cards');
+
+    const cardStates = this.myHand.map((card, i) => {
       const playable = isMyTurn && canPlay(card, st.topCard, st.currentColor, st.pendingDraw);
       const restricted = this.drawnCardIndex !== null && i !== this.drawnCardIndex;
-      const isDrawn = this.drawnCardIndex === i;
-      return this.cardHTML(card, {
-        index: i,
-        playable: playable && !restricted,
+      return {
+        card, i,
+        canPlay: playable && !restricted,
         dimmed: isMyTurn && !playable,
-        isDrawn,
-      });
-    }).join('');
+        isDrawn: this.drawnCardIndex === i,
+      };
+    });
 
-    el.querySelectorAll('.card[data-index]').forEach(el => {
-      const i = parseInt(el.dataset.index);
-      if (el.classList.contains('playable')) {
-        el.addEventListener('click', () => this.onCardClick(i));
+    const playable = cardStates.filter(c => c.canPlay || c.isDrawn);
+    // Only filter when some cards are playable AND some are not
+    const canFilter = isMyTurn && playable.length > 0 && playable.length < cardStates.length;
+    const visible = (!this.showAllCards && canFilter) ? playable : cardStates;
+
+    el.innerHTML = visible.map(c => this.cardHTML(c.card, {
+      index: c.i,
+      playable: c.canPlay,
+      dimmed: this.showAllCards && c.dimmed,
+      isDrawn: c.isDrawn,
+    })).join('');
+
+    el.querySelectorAll('.card[data-index]').forEach(cardEl => {
+      const i = parseInt(cardEl.dataset.index);
+      if (cardEl.classList.contains('playable')) {
+        cardEl.addEventListener('click', () => this.onCardClick(i));
       }
     });
+
+    if (canFilter) {
+      toggleBtn.style.display = '';
+      toggleBtn.textContent = this.showAllCards
+        ? `Playable only (${cardStates.filter(c => c.canPlay).length})`
+        : `All cards (${this.myHand.length})`;
+    } else {
+      toggleBtn.style.display = 'none';
+    }
+  }
+
+  toggleCardView() {
+    this.showAllCards = !this.showAllCards;
+    if (this.publicState) {
+      const st = this.publicState;
+      const myIdx = st.players.findIndex(p => p.id === selfId);
+      this.renderHand(st, st.currentPlayerIndex === myIdx);
+    }
   }
 
   cardHTML(card, opts = {}) {
@@ -537,6 +570,7 @@ class UnoApp {
     });
 
     $('btn-play-again').addEventListener('click', () => this.playAgain());
+    $('btn-toggle-cards').addEventListener('click', () => this.toggleCardView());
   }
 }
 

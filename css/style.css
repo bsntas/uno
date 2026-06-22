@@ -57,10 +57,7 @@ input {
 /* ── Screens ─────────────────────────────────────────────────── */
 .screen {
   position: fixed;
-  top: 0; left: 0; right: 0;
-  /* Use JS-measured innerHeight so the screen matches exactly what the
-     browser window shows, regardless of address-bar / nav-bar state. */
-  height: var(--app-h, 100svh);
+  inset: 0;
   display: none;
   flex-direction: column;
   align-items: center;
@@ -344,10 +341,8 @@ input {
 #screen-game {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
   padding: 0;
-  grid-template-rows: auto auto auto 1fr auto;
-  /* No explicit height — position:fixed + inset:0 (from .screen) already
-     pins all four edges to the visual viewport, so the grid fills it
-     exactly without reacting to browser-chrome show/hide. */
+  grid-template-rows: auto auto auto auto auto;
+  align-content: space-between;
   overflow: hidden;
 }
 #screen-game.active { display: grid; }
@@ -505,14 +500,13 @@ input {
   overflow: hidden;
 }
 
-/* Center area — 1fr row, content centred inside */
+/* Center area */
 .game-center {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 24px;
   padding: 8px 16px;
-  align-self: center;
 }
 
 .pile-wrap {

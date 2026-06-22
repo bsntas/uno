@@ -340,15 +340,17 @@ input {
 /* ── GAME SCREEN ─────────────────────────────────────────────── */
 #screen-game {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
+  flex-direction: column;  /* explicit — not just inherited from .screen */
+  align-items: stretch;
+  justify-content: flex-start;
   padding: 0;
-  grid-template-rows: auto auto auto auto auto;
-  align-content: space-between;
   overflow: hidden;
 }
-#screen-game.active { display: grid; }
+#screen-game.active { display: flex; }
 
 /* Info bar */
 .game-info-bar {
+  flex-shrink: 0;  /* never squish — info bar is always fully visible */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -356,8 +358,9 @@ input {
   background: rgba(0,0,0,.3);
   backdrop-filter: blur(6px);
   border-bottom: 1px solid rgba(255,255,255,.08);
-  flex-wrap: wrap;
-  min-height: 50px;
+  flex-wrap: nowrap;  /* single line always — last-action truncates via ellipsis */
+  min-height: 46px;
+  overflow: hidden;
 }
 .dir-badge {
   display: flex;
@@ -425,8 +428,10 @@ input {
 }
 @keyframes flash { from { opacity: 1; } to { opacity: .75; } }
 
-/* Opponents */
+/* Opponents — capped height so 5 players can't consume the whole screen */
 #opponents-area {
+  flex-shrink: 0;
+  max-height: 40vh;  /* scrolls beyond 3-4 players; leaves room for game center */
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -500,8 +505,10 @@ input {
   overflow: hidden;
 }
 
-/* Center area */
+/* Center area — flex:1 fills spare space; min-height ensures piles always visible */
 .game-center {
+  flex: 1;
+  min-height: 150px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -589,11 +596,12 @@ input {
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .6; } }
 
-/* My hand area */
+/* My hand area — anchored to bottom; safe-area keeps buttons above iPhone home bar */
 .my-area {
+  flex-shrink: 0;
   background: rgba(0,0,0,.25);
   border-top: 1px solid rgba(255,255,255,.08);
-  padding: 10px 12px;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -619,7 +627,7 @@ input {
   overflow-x: hidden;
   overflow-y: auto;
   scroll-snap-type: none;
-  max-height: 48vh;
+  max-height: 36vh;  /* ≈3 card rows on most phones; game-center still visible */
   align-content: flex-start;
   padding: 8px 6px 4px;
   gap: 5px;
@@ -645,7 +653,7 @@ input {
   #my-hand.wrap {
     --card-w: 64px;
     --card-h: 96px;
-    max-height: 45vh;
+    max-height: 36vh;
   }
 }
 
@@ -1099,17 +1107,11 @@ input {
     --card-h: 84px;
   }
 
-  /* Info bar: single line, hide text labels to save space */
-  .game-info-bar {
-    flex-wrap: nowrap;
-    padding: 6px 10px;
-    min-height: 40px;
-    gap: 6px;
-    overflow: hidden;
-  }
+  /* Info bar: tighten up, hide verbose text labels */
+  .game-info-bar { padding: 5px 10px; min-height: 38px; gap: 6px; }
   #dir-label, #color-label { display: none; }
   .dir-badge, .color-badge { padding: 4px 8px; }
-  #last-action { max-width: none; flex: 1; font-size: 11px; text-align: right; }
+  #last-action { font-size: 11px; }
 
   /* Opponents */
   #opponents-area { padding: 6px 10px; gap: 6px; }
@@ -1132,7 +1134,7 @@ input {
   .c-br { bottom: 4px; right: 5px; }
 
   /* My hand & actions */
-  .my-area { padding: 0 10px 8px; gap: 6px; }
+  .my-area { padding: 0 10px max(8px, env(safe-area-inset-bottom, 0px)); gap: 6px; }
   #my-hand { gap: 4px; padding: 18px 6px 4px; }
   .hand-actions { gap: 6px; flex-wrap: nowrap; }
   #btn-draw, #btn-pass {
@@ -1161,13 +1163,13 @@ input {
 /* ─ Landscape phones (short screens) */
 @media (max-height: 480px) and (orientation: landscape) {
   :root { --card-w: 52px; --card-h: 78px; }
-  .game-info-bar { padding: 4px 10px; min-height: 36px; }
+  .game-info-bar { padding: 4px 10px; min-height: 32px; }
   #dir-label, #color-label { display: none; }
-  .game-center { padding: 2px 8px; gap: 10px; }
+  .game-center { padding: 2px 8px; gap: 10px; min-height: 90px; }
   .pile-label { display: none; }
   .my-area { padding: 0 10px 6px; gap: 4px; }
   #my-hand { padding: 16px 6px 2px; }
-  #opponents-area { padding: 4px 10px; }
+  #opponents-area { padding: 4px 10px; max-height: 35vh; }
 }
 
 /* ─ Tablets and up */

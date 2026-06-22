@@ -598,6 +598,42 @@ input {
 #my-hand::-webkit-scrollbar-track { background: transparent; }
 #my-hand::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 2px; }
 
+/* ── Wrap mode (Show All) ─────────────────────────────────── */
+#my-hand.wrap {
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: none;
+  max-height: 48vh;
+  align-content: flex-start;
+  padding: 8px 6px 4px;
+  gap: 5px;
+  /* Compact card size: fits 6/row on most phones */
+  --card-w: 52px;
+  --card-h: 78px;
+  --card-r: 7px;
+}
+/* No lift in wrap mode — avoids layout shift; use glow + outline only */
+#my-hand.wrap .card.playable {
+  transform: none;
+  box-shadow: 0 0 0 2.5px var(--gold), 0 0 14px rgba(245,200,66,.6), var(--shadow-card);
+}
+#my-hand.wrap .card.playable:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px var(--gold), 0 0 22px rgba(245,200,66,.9), var(--shadow-deep);
+  z-index: 10;
+}
+#my-hand.wrap .c-sym    { font-size: 14px; }
+#my-hand.wrap .c-corner { font-size: 10px; }
+
+@media (min-width: 640px) {
+  #my-hand.wrap {
+    --card-w: 64px;
+    --card-h: 96px;
+    max-height: 45vh;
+  }
+}
+
 .hand-actions {
   display: flex;
   gap: 10px;

@@ -75,6 +75,14 @@
       </div>
 
       <div class="lobby-actions">
+        <div class="flip-toggle-wrap" id="flip-toggle-wrap" style="display:none">
+          <label class="flip-toggle-label">
+            <input type="checkbox" id="flip-mode-toggle">
+            <span class="flip-toggle-pill"></span>
+            <span class="flip-toggle-text">⇌ UNO Flip Mode</span>
+          </label>
+          <p class="flip-toggle-hint">Dark side: Skip Everyone, Draw 5, Wild Draw Color</p>
+        </div>
         <button id="btn-start" class="btn-primary" style="display:none" disabled>
           Waiting for players…
         </button>
@@ -91,7 +99,7 @@
 
     <!-- Info bar -->
     <div class="game-info-bar">
-      <div class="dir-badge">
+      <div class="dir-badge" id="dir-badge">
         <span id="dir-arrow">⟳</span>
         <span id="dir-label">Clockwise</span>
       </div>
@@ -99,7 +107,7 @@
         <div id="color-dot" class="color-dot dot-wild"></div>
         <span id="color-label">Wild</span>
       </div>
-      <div class="info-sep"></div>
+      <span id="flip-side-badge" class="flip-side-badge" style="display:none"></span>
       <span id="last-action"></span>
     </div>
 
@@ -148,7 +156,8 @@
   <div id="modal-color" class="modal">
     <div class="modal-box">
       <h3>Choose a Color</h3>
-      <div class="color-grid">
+      <div id="hand-color-summary" class="hand-color-summary"></div>
+      <div class="color-grid" id="color-grid">
         <button class="color-choice" data-color="red">🔴 Red</button>
         <button class="color-choice" data-color="blue">🔵 Blue</button>
         <button class="color-choice" data-color="green">🟢 Green</button>

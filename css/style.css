@@ -336,7 +336,7 @@ input {
 #screen-game {
   background: radial-gradient(ellipse at center, #1d7347, #0a2d1a);
   padding: 0;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto 1fr auto;
   height: 100dvh;
   overflow: hidden;
 }
@@ -386,17 +386,27 @@ input {
 
 #color-label { font-size: 12px; font-weight: 600; }
 
-.info-sep { flex: 1; }
-
 #last-action {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--text-muted);
   text-align: right;
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.flip-side-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.flip-side-badge.side-light { background: rgba(255,255,255,.15); color: #fff; }
+.flip-side-badge.side-dark  { background: #2d1b69; color: #d4a8ff; border: 1px solid #7c3aed; }
 
 /* Pending draw banner */
 #pending-banner {
@@ -485,13 +495,14 @@ input {
   overflow: hidden;
 }
 
-/* Center area */
+/* Center area — 1fr row, content centred inside */
 .game-center {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 24px;
   padding: 8px 16px;
+  align-self: center;
 }
 
 .pile-wrap {
@@ -734,6 +745,64 @@ input {
   text-shadow: 0 1px 2px rgba(255,255,255,.15);
 }
 
+/* ── UNO Flip dark-side card colours ─────────────────────────── */
+.card-pink   { background: linear-gradient(145deg, #ffb3cc, #e91e8c 45%, #880e4f); }
+.card-teal   { background: linear-gradient(145deg, #80deea, #00838f 45%, #004d52); }
+.card-orange { background: linear-gradient(145deg, #ffcc80, #ef6c00 45%, #8d3600); }
+.card-purple { background: linear-gradient(145deg, #ce93d8, #8e24aa 45%, #4a0072); }
+.card-dark-wild {
+  background: conic-gradient(from 180deg, #e91e8c 0 25%, #00838f 25% 50%, #ef6c00 50% 75%, #8e24aa 75%);
+}
+
+/* Orange is lighter — darken text */
+.card-orange .c-corner,
+.card-orange .c-sym {
+  color: rgba(0,0,0,.8);
+  text-shadow: 0 1px 2px rgba(255,255,255,.1);
+}
+
+/* Dark side dots */
+.dot-pink   { background: #e91e8c; }
+.dot-teal   { background: #00838f; }
+.dot-orange { background: #ef6c00; }
+.dot-purple { background: #8e24aa; }
+.dot-dark-wild {
+  background: conic-gradient(#e91e8c 0 25%, #00838f 25% 50%, #ef6c00 50% 75%, #8e24aa 75%);
+}
+
+/* Dark-side wild colour bar tints */
+.bar-pink   { background: #e91e8c; }
+.bar-teal   { background: #00838f; }
+.bar-orange { background: #ef6c00; }
+.bar-purple { background: #8e24aa; }
+
+/* ── Card animations ──────────────────────────────────────────── */
+@keyframes cardLand {
+  0%   { transform: scale(1.4) rotate(-10deg) translateY(-12px); opacity: 0.5; }
+  60%  { transform: scale(1.05) rotate(2deg) translateY(0); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes cardDeal {
+  0%   { transform: translateX(-50px) scale(0.8); opacity: 0; }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+@keyframes deckBounce {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(0.88) translateY(4px); }
+  70%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes dirFlash {
+  0%   { transform: scale(1); background: var(--surface-light); }
+  50%  { transform: scale(1.25); background: rgba(245,200,66,.35); box-shadow: 0 0 14px rgba(245,200,66,.7); }
+  100% { transform: scale(1); background: var(--surface-light); }
+}
+
+.discard-land { animation: cardLand 0.38s cubic-bezier(.17,.67,.38,1.35) both; }
+.card-deal-in { animation: cardDeal 0.28s ease both; }
+.deck-bounce  { animation: deckBounce 0.35s ease; }
+.dir-flash    { animation: dirFlash 0.55s ease; }
+
 /* Card back */
 .card-back {
   background: linear-gradient(145deg, #4a5568, #1a237e);
@@ -873,6 +942,32 @@ input {
 }
 
 /* Color picker */
+.hand-color-summary {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.hcs-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.hcs-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,.25);
+}
+.hcs-count {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+}
+
 .color-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -890,10 +985,18 @@ input {
   transition: transform .15s, box-shadow .15s;
 }
 .color-choice:hover { transform: scale(1.05); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+
+/* Light-side colours */
 .color-choice[data-color=red]    { background: linear-gradient(135deg, #fc8181, #e53e3e); }
 .color-choice[data-color=blue]   { background: linear-gradient(135deg, #63b3ed, #2b6cb0); }
 .color-choice[data-color=green]  { background: linear-gradient(135deg, #68d391, #276749); }
 .color-choice[data-color=yellow] { background: linear-gradient(135deg, #f6e05e, #c05621); }
+
+/* Dark-side colours */
+.color-choice[data-color=pink]   { background: linear-gradient(135deg, #f48fb1, #c2185b); }
+.color-choice[data-color=teal]   { background: linear-gradient(135deg, #80deea, #00695c); }
+.color-choice[data-color=orange] { background: linear-gradient(135deg, #ffcc80, #e64a19); }
+.color-choice[data-color=purple] { background: linear-gradient(135deg, #ce93d8, #6a1b9a); }
 
 /* Game over */
 .go-scores {
@@ -915,6 +1018,44 @@ input {
   box-shadow: 0 4px 15px rgba(245,200,66,.35);
 }
 .btn-play-again:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(245,200,66,.5); }
+
+/* Flip mode lobby toggle */
+.flip-toggle-wrap {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.flip-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.flip-toggle-label input { display: none; }
+.flip-toggle-pill {
+  width: 44px; height: 24px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.15);
+  flex-shrink: 0;
+  position: relative;
+  transition: background .2s;
+}
+.flip-toggle-pill::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s;
+}
+.flip-toggle-label input:checked ~ .flip-toggle-pill { background: #7c3aed; }
+.flip-toggle-label input:checked ~ .flip-toggle-pill::after { transform: translateX(20px); }
+.flip-toggle-text { font-size: 14px; font-weight: 700; }
+.flip-toggle-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
 
 /* ── TOAST ───────────────────────────────────────────────────── */
 .toast {

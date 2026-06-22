@@ -1,7 +1,17 @@
-const COLORS = ['red', 'blue', 'green', 'yellow'];
+const COLORS      = ['red', 'blue', 'green', 'yellow'];
+const DARK_COLORS = ['pink', 'teal', 'orange', 'purple'];
 
 function uid() {
   return Math.random().toString(36).substr(2, 9);
+}
+
+// Returns the active side's { color, type, value } for a card.
+// Regular (non-flip) cards have no darkType and always return their own fields.
+function activeProps(card, side) {
+  if (side === 'dark' && card.darkType !== undefined) {
+    return { color: card.darkColor, type: card.darkType, value: card.darkValue };
+  }
+  return { color: card.color, type: card.type, value: card.value };
 }
 
 function createDeck() {
@@ -24,6 +34,36 @@ function createDeck() {
   return deck;
 }
 
+// Flip-mode deck: each card has light side (color/type/value) and dark side (darkColor/darkType/darkValue).
+// 4 colours × (1 zero + 9×2 numbers + 2 skip + 2 reverse + 2 draw + 2 flip) + 4 wild + 4 wild/wildcolor = ~116 cards
+function createFlipDeck() {
+  const deck = [];
+  for (let ci = 0; ci < 4; ci++) {
+    const lc = COLORS[ci], dc = DARK_COLORS[ci];
+
+    deck.push({ id: uid(), color: lc, type: 'number', value: 0,
+      darkColor: dc, darkType: 'number', darkValue: 0 });
+
+    for (let n = 1; n <= 9; n++) {
+      for (let j = 0; j < 2; j++) {
+        deck.push({ id: uid(), color: lc, type: 'number', value: n,
+          darkColor: dc, darkType: 'number', darkValue: n });
+      }
+    }
+    for (let j = 0; j < 2; j++) {
+      deck.push({ id: uid(), color: lc, type: 'skip',    value: null, darkColor: dc, darkType: 'skipall', darkValue: null });
+      deck.push({ id: uid(), color: lc, type: 'reverse', value: null, darkColor: dc, darkType: 'reverse', darkValue: null });
+      deck.push({ id: uid(), color: lc, type: 'draw2',   value: null, darkColor: dc, darkType: 'draw5',   darkValue: null });
+      deck.push({ id: uid(), color: lc, type: 'flip',    value: null, darkColor: dc, darkType: 'flip',    darkValue: null });
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    deck.push({ id: uid(), color: 'wild', type: 'wild',  value: null, darkColor: 'dark-wild', darkType: 'wild',      darkValue: null });
+    deck.push({ id: uid(), color: 'wild', type: 'wild4', value: null, darkColor: 'dark-wild', darkType: 'wildcolor', darkValue: null });
+  }
+  return deck;
+}
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -33,30 +73,56 @@ function shuffle(arr) {
   return a;
 }
 
-function canPlay(card, topCard, currentColor, pendingDraw) {
-  if (pendingDraw > 0) return card.type === 'draw2' || card.type === 'wild4';
-  if (card.type === 'wild' || card.type === 'wild4') return true;
-  if (card.color === currentColor) return true;
-  if (card.type === 'number' && topCard.type === 'number' && card.value === topCard.value) return true;
-  if (card.type !== 'number' && card.type === topCard.type) return true;
+function canPlay(card, topCard, currentColor, pendingDraw, side = 'light') {
+  const cp = activeProps(card, side);
+  const tp = topCard ? activeProps(topCard, side) : null;
+
+  // Flip card can always be played (it switches sides)
+  if (cp.type === 'flip') return true;
+
+  if (pendingDraw > 0) {
+    // Only draw-stacking cards can be played against a pending draw
+    return cp.type === 'draw2' || cp.type === 'wild4' || cp.type === 'draw5';
+  }
+
+  // Wild-type cards are always playable
+  if (cp.type === 'wild' || cp.type === 'wild4' || cp.type === 'wildcolor') return true;
+
+  // Colour match
+  if (cp.color === currentColor) return true;
+  if (!tp) return false;
+  // Same number
+  if (cp.type === 'number' && tp.type === 'number' && cp.value === tp.value) return true;
+  // Same action type
+  if (cp.type !== 'number' && cp.type === tp.type) return true;
   return false;
 }
 
-function cardSymbol(card) {
-  if (card.type === 'number') return String(card.value);
-  if (card.type === 'skip') return '⊘';
-  if (card.type === 'reverse') return '↺';
-  if (card.type === 'draw2') return '+2';
-  if (card.type === 'wild') return '✦';
-  if (card.type === 'wild4') return '+4';
+function cardSymbol(card, side = 'light') {
+  const { type, value } = activeProps(card, side);
+  if (type === 'number')    return String(value);
+  if (type === 'skip')      return '⊘';
+  if (type === 'reverse')   return '↺';
+  if (type === 'draw2')     return '+2';
+  if (type === 'wild')      return '✦';
+  if (type === 'wild4')     return '+4';
+  if (type === 'flip')      return '⇌';
+  if (type === 'skipall')   return '⊗';
+  if (type === 'draw5')     return '+5';
+  if (type === 'wildcolor') return '⬤?';
   return '?';
 }
 
-function cardName(card) {
-  const cn = { red: 'Red', blue: 'Blue', green: 'Green', yellow: 'Yellow', wild: '' };
-  const tn = { number: card.value, skip: 'Skip', reverse: 'Reverse', draw2: 'Draw 2', wild: 'Wild', wild4: 'Wild +4' };
-  const prefix = (card.type === 'wild' || card.type === 'wild4') ? '' : cn[card.color] + ' ';
-  return prefix + tn[card.type];
+function cardName(card, side = 'light') {
+  const { color, type, value } = activeProps(card, side);
+  const cn = { red:'Red', blue:'Blue', green:'Green', yellow:'Yellow',
+               pink:'Pink', teal:'Teal', orange:'Orange', purple:'Purple', wild:'', 'dark-wild': '' };
+  const tn = { number: value, skip: 'Skip', reverse: 'Reverse', draw2: 'Draw 2',
+               wild: 'Wild', wild4: 'Wild +4', flip: 'Flip',
+               skipall: 'Skip Everyone', draw5: 'Draw 5', wildcolor: 'Wild Draw Color' };
+  const isWild = type === 'wild' || type === 'wild4' || type === 'wildcolor';
+  const prefix = isWild ? '' : (cn[color] || color) + ' ';
+  return prefix + tn[type];
 }
 
 class GameRoom {
@@ -74,6 +140,8 @@ class GameRoom {
     this.unoCallers = new Set();
     this.waitingForPass = false;
     this.drawnCardInfo = null;
+    this.flipMode = false;
+    this.currentSide = 'light';
   }
 
   get topCard() { return this.discardPile[this.discardPile.length - 1] || null; }
@@ -101,13 +169,14 @@ class GameRoom {
 
   startGame() {
     if (this.players.length < 2) return { error: 'Need at least 2 players' };
-    this.deck = shuffle(createDeck());
+    this.deck = shuffle(this.flipMode ? createFlipDeck() : createDeck());
     this.discardPile = [];
+    this.currentSide = 'light';
     for (const p of this.players) p.hand = this.deck.splice(0, 7);
 
     let startCard;
     for (let i = 0; i < this.deck.length; i++) {
-      if (this.deck[i].type === 'number') {
+      if (activeProps(this.deck[i], 'light').type === 'number') {
         [startCard] = this.deck.splice(i, 1);
         break;
       }
@@ -115,7 +184,7 @@ class GameRoom {
     if (!startCard) startCard = this.deck.shift();
 
     this.discardPile = [startCard];
-    this.currentColor = startCard.color;
+    this.currentColor = activeProps(startCard, 'light').color;
     this.phase = 'playing';
     this.currentPlayerIndex = 0;
     this.direction = 1;
@@ -141,6 +210,7 @@ class GameRoom {
     this.unoCallers = new Set();
     this.waitingForPass = false;
     this.drawnCardInfo = null;
+    this.currentSide = 'light';
     for (const p of this.players) p.hand = [];
   }
 
@@ -180,9 +250,15 @@ class GameRoom {
 
     const card = player.hand[cardIndex];
     if (!card) return { error: 'Invalid card' };
-    if (!canPlay(card, this.topCard, this.currentColor, this.pendingDraw))
+
+    const cp = activeProps(card, this.currentSide);
+
+    if (!canPlay(card, this.topCard, this.currentColor, this.pendingDraw, this.currentSide))
       return { error: 'Cannot play this card' };
-    if ((card.type === 'wild' || card.type === 'wild4') && !COLORS.includes(chosenColor))
+
+    const isWild = cp.type === 'wild' || cp.type === 'wild4' || cp.type === 'wildcolor';
+    const allValidColors = [...COLORS, ...DARK_COLORS];
+    if (isWild && !allValidColors.includes(chosenColor))
       return { error: 'Choose a valid color' };
 
     player.hand.splice(cardIndex, 1);
@@ -191,7 +267,11 @@ class GameRoom {
     this.waitingForPass = false;
     this.drawnCardInfo = null;
 
-    this.currentColor = (card.type === 'wild' || card.type === 'wild4') ? chosenColor : card.color;
+    if (isWild) {
+      this.currentColor = chosenColor;
+    } else if (cp.type !== 'flip') {
+      this.currentColor = cp.color;
+    }
 
     if (player.hand.length === 0) {
       this.phase = 'game_over';
@@ -200,18 +280,59 @@ class GameRoom {
       return { ok: true };
     }
 
-    this.lastAction = `${player.name} played ${cardName(card)}`;
+    this.lastAction = `${player.name} played ${cardName(card, this.currentSide)}`;
     let skipExtra = 0;
 
-    if (card.type === 'skip') {
-      skipExtra = 1;
-    } else if (card.type === 'reverse') {
-      if (this.players.length === 2) skipExtra = 1;
-      else this.direction *= -1;
-    } else if (card.type === 'draw2') {
-      this.pendingDraw += 2;
-    } else if (card.type === 'wild4') {
-      this.pendingDraw += 4;
+    switch (cp.type) {
+      case 'skip':
+        skipExtra = 1;
+        break;
+      case 'skipall':
+        skipExtra = this.players.length - 1;
+        this.lastAction += ' — everyone is skipped!';
+        break;
+      case 'reverse':
+        if (this.players.length === 2) {
+          skipExtra = 1;
+        } else {
+          this.direction *= -1;
+          this.lastAction += ` — direction reversed!`;
+        }
+        break;
+      case 'draw2':
+        this.pendingDraw += 2;
+        break;
+      case 'draw5':
+        this.pendingDraw += 5;
+        break;
+      case 'wild4':
+        this.pendingDraw += 4;
+        break;
+      case 'wildcolor': {
+        // Next player draws cards until they draw one matching chosenColor (max 30)
+        const nextIdx = this.nextIndex(1);
+        const nextP = this.players[nextIdx];
+        let drawn = 0;
+        while (drawn < 30) {
+          this.replenish();
+          if (!this.deck.length) break;
+          const dc = this.deck.shift();
+          nextP.hand.push(dc);
+          drawn++;
+          if (activeProps(dc, this.currentSide).color === chosenColor) break;
+        }
+        this.lastAction += ` — ${nextP.name} drew ${drawn} card${drawn !== 1 ? 's' : ''}`;
+        skipExtra = 1;
+        break;
+      }
+      case 'flip': {
+        const prevSide = this.currentSide;
+        this.currentSide = prevSide === 'light' ? 'dark' : 'light';
+        // Set current color to the newly-active side's color of the just-played flip card
+        this.currentColor = activeProps(card, this.currentSide).color;
+        this.lastAction += ` — flipped to ${this.currentSide} side!`;
+        break;
+      }
     }
 
     this.advance(skipExtra);
@@ -239,14 +360,14 @@ class GameRoom {
 
     const card = this.deck.shift();
     player.hand.push(card);
-    const cardIndex = player.hand.length - 1;
-    const playable = canPlay(card, this.topCard, this.currentColor, 0);
+    const cardIdx = player.hand.length - 1;
+    const playable = canPlay(card, this.topCard, this.currentColor, 0, this.currentSide);
 
     if (playable) {
       this.waitingForPass = true;
-      this.drawnCardInfo = { playerId, cardIndex };
+      this.drawnCardInfo = { playerId, cardIndex: cardIdx };
       this.lastAction = `${player.name} drew a card`;
-      return { ok: true, canPlay: true, cardIndex };
+      return { ok: true, canPlay: true, cardIndex: cardIdx };
     }
 
     this.lastAction = `${player.name} drew a card`;
@@ -271,6 +392,12 @@ class GameRoom {
     return { ok: true };
   }
 
+  setFlipMode(enabled) {
+    if (this.phase !== 'lobby') return { error: 'Cannot change settings mid-game' };
+    this.flipMode = !!enabled;
+    return { ok: true };
+  }
+
   getPublicState() {
     return {
       phase: this.phase,
@@ -289,6 +416,8 @@ class GameRoom {
       winner: this.winner,
       lastAction: this.lastAction,
       waitingForPass: this.waitingForPass,
+      flipMode: this.flipMode,
+      currentSide: this.currentSide,
     };
   }
 
@@ -300,4 +429,4 @@ class GameRoom {
   }
 }
 
-export { COLORS, canPlay, cardSymbol, cardName, GameRoom };
+export { COLORS, DARK_COLORS, activeProps, canPlay, cardSymbol, cardName, GameRoom };

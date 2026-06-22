@@ -23,6 +23,9 @@ class UnoApp {
     this._toastTimer = null;
     this._hiddenAt = 0;
     this.showAllCards = false;
+    this._disconnectTimers = new Map();
+    this._reconnecting = false;
+    this._heartbeatInterval = null;
     this.bindUI();
     this.setupVisibility();
   }
@@ -64,8 +67,12 @@ class UnoApp {
     const [sendMsg, onMsg] = this.trRoom.makeAction('msg');
     this.sendMsg = sendMsg;
 
+    // Keep MQTT alive and re-sync guests when host is backgrounded
+    this._heartbeatInterval = setInterval(() => {
+      if (this.trRoom && this.room) this.broadcastState();
+    }, 25000);
+
     this.trRoom.onPeerJoin(peerId => {
-      // Announce ourselves as host to the new peer
       sendMsg({ type: 'host-hello', name: this.myName }, peerId);
     });
 
@@ -78,20 +85,48 @@ class UnoApp {
         this.renderLobbyPlayers();
         this.broadcastState();
       } else {
-        this.showToast(playerName + ' disconnected', 'error');
-        this.room.removePlayer(peerId);
-        if (this.room.players.length < 2) {
-          this.room.phase = 'game_over';
-          this.room.winner = { id: selfId, name: this.myName };
-          this.room.lastAction = playerName + ' left the game';
-        }
-        this.broadcastState();
+        // Give the player 45 s to reconnect before removing them
+        this.showToast(`${playerName} stepped away — waiting…`, 'warn');
+        const timer = setTimeout(() => {
+          this._disconnectTimers.delete(peerId);
+          if (!this.room.players.find(p => p.id === peerId)) return;
+          this.showToast(`${playerName} left the game`, 'error');
+          this.room.removePlayer(peerId);
+          if (this.room.players.length < 2) {
+            this.room.phase = 'game_over';
+            this.room.winner = { id: selfId, name: this.myName };
+            this.room.lastAction = playerName + ' left the game';
+          }
+          this.broadcastState();
+        }, 45000);
+        this._disconnectTimers.set(peerId, timer);
       }
     });
 
     onMsg((data, peerId) => {
       if (!this.isHost) return;
       if (data.type === 'guest-join') {
+        // Check if a disconnected player is rejoining under the same name
+        const oldPeerId = [...this._disconnectTimers.keys()]
+          .find(id => this.room.players.find(p => p.id === id)?.name === data.name);
+        if (oldPeerId !== undefined) {
+          clearTimeout(this._disconnectTimers.get(oldPeerId));
+          this._disconnectTimers.delete(oldPeerId);
+          const player = this.room.players.find(p => p.id === oldPeerId);
+          if (player) {
+            player.id = peerId;
+            if (this.room.drawnCardInfo?.playerId === oldPeerId) {
+              this.room.drawnCardInfo.playerId = peerId;
+            }
+            if (this.room.unoCallers.has(oldPeerId)) {
+              this.room.unoCallers.delete(oldPeerId);
+              this.room.unoCallers.add(peerId);
+            }
+            this.showToast(`${data.name} reconnected!`, 'success');
+            this.broadcastState();
+            return;
+          }
+        }
         const result = this.room.addPlayer(peerId, data.name);
         if (result.error) {
           sendMsg({ type: 'error', message: result.error, fatal: true }, peerId);
@@ -149,8 +184,8 @@ class UnoApp {
 
     this.trRoom.onPeerLeave(peerId => {
       if (peerId === this.hostPeerId && this.publicState?.phase !== 'game_over') {
-        this.showToast('Host disconnected', 'error');
-        setTimeout(() => location.reload(), 2000);
+        this.showToast('Connection lost — reconnecting…', 'warn');
+        this._attemptReconnect();
       }
     });
 
@@ -192,6 +227,25 @@ class UnoApp {
         }
       }
     });
+  }
+
+  _attemptReconnect() {
+    if (this._reconnecting) return;
+    this._reconnecting = true;
+    const code = this.roomCode;
+    const name = this.myName;
+
+    try { this.trRoom?.leave?.(); } catch (_) {}
+    this.trRoom = null;
+    this.sendMsg = null;
+    this.hostPeerId = null;
+
+    setTimeout(() => {
+      this._reconnecting = false;
+      document.getElementById('player-name').value = name;
+      document.getElementById('room-code-input').value = code;
+      this.joinGame();
+    }, 2000);
   }
 
   // ─── Action processing (host only) ──────────────────────────
@@ -428,7 +482,7 @@ class UnoApp {
     const canFilter = isMyTurn && playable.length > 0 && playable.length < cardStates.length;
     const visible = (!this.showAllCards && canFilter) ? playable : cardStates;
 
-    el.classList.toggle('wrap', this.showAllCards);
+    el.classList.toggle('wrap', this.showAllCards || !isMyTurn);
 
     el.innerHTML = visible.map(c => this.cardHTML(c.card, {
       index: c.i,
